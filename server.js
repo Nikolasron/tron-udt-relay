@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 
 const express = require("express");
@@ -11,7 +10,25 @@ const path = require("path");
 
 const app = express();
 
-app.use(helmet());
+/*
+ * ------------------------------------------------------------
+ * SECURITY MIDDLEWARE
+ *
+ * IMPORTANT: contentSecurityPolicy is DISABLED because the
+ * frontend uses inline <script> tags and CDN scripts. Helmet's
+ * default CSP blocks inline scripts, which prevents the page
+ * from running any JavaScript at all.
+ *
+ * Later, you can re-enable CSP with a proper allowlist if you
+ * want the extra security.
+ * ------------------------------------------------------------
+ */
+app.use(
+  helmet({
+    contentSecurityPolicy: false
+  })
+);
+
 app.use(express.json());
 
 const limiter = rateLimit({
@@ -98,8 +115,6 @@ const pool = new Pool({
 
 /*
  * DATABASE INITIALIZATION
- *
- * The SQL must remain inside this function.
  */
 async function initDatabase() {
   await pool.query(`
@@ -139,7 +154,6 @@ function isValidTronAddress(address) {
 
 /*
  * Convert USDT amount to raw units.
- * USDT on TRON uses 6 decimals.
  */
 function amountToRaw(amount) {
   const value = Number(amount);
@@ -176,10 +190,28 @@ function createId() {
 }
 
 /*
+ * Fetch with timeout wrapper.
+ * Prevents any single TRON call from hanging the server.
+ */
+async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/*
  * Get TRON transaction information.
  */
 async function getTransactionInfo(txid) {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${TRON_HOST}/wallet/gettransactionbyid?value=${encodeURIComponent(txid)}`,
     {
       headers: {
@@ -201,7 +233,7 @@ async function getTransactionInfo(txid) {
  * Get TRC-20 events for a transaction.
  */
 async function getTransferEvents(txid) {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${TRON_HOST}/v1/transactions/${encodeURIComponent(txid)}/events`,
     {
       headers: {
@@ -229,38 +261,25 @@ async function verifyTransfer(
   expectedSender,
   expectedAmountRaw
 ) {
-  const tx =
-    await getTransactionInfo(txid);
+  const tx = await getTransactionInfo(txid);
 
   if (!tx || !tx.txID) {
-    return {
-      valid: false,
-      reason: "Transaction not found"
-    };
+    return { valid: false, reason: "Transaction not found" };
   }
 
   if (!tx.ret || !Array.isArray(tx.ret)) {
-    return {
-      valid: false,
-      reason: "Transaction status unavailable"
-    };
+    return { valid: false, reason: "Transaction status unavailable" };
   }
 
-  const successful =
-    tx.ret.some(
-      item =>
-        item.contractRet === "SUCCESS"
-    );
+  const successful = tx.ret.some(
+    item => item.contractRet === "SUCCESS"
+  );
 
   if (!successful) {
-    return {
-      valid: false,
-      reason: "Transaction was not successful"
-    };
+    return { valid: false, reason: "Transaction was not successful" };
   }
 
-  const events =
-    await getTransferEvents(txid);
+  const events = await getTransferEvents(txid);
 
   for (const event of events) {
     if (
@@ -270,32 +289,22 @@ async function verifyTransfer(
       continue;
     }
 
-    const result =
-      event.result || {};
+    const result = event.result || {};
 
     const from = result.from;
     const to = result.to;
-    const value =
-      String(result.value || "0");
+    const value = String(result.value || "0");
 
     if (
       from === expectedSender &&
       to === RELAY_ADDRESS &&
       value === String(expectedAmountRaw)
     ) {
-      return {
-        valid: true,
-        from,
-        to,
-        amountRaw: value
-      };
+      return { valid: true, from, to, amountRaw: value };
     }
   }
 
-  return {
-    valid: false,
-    reason: "Matching USDT transfer not found"
-  };
+  return { valid: false, reason: "Matching USDT transfer not found" };
 }
 
 /*
@@ -308,13 +317,11 @@ async function findDeposit(request) {
     `&limit=200` +
     `&contract_address=${USDT_CONTRACT}`;
 
-  const response =
-    await fetch(url, {
-      headers: {
-        "TRON-PRO-API-KEY":
-          TRONGRID_API_KEY
-      }
-    });
+  const response = await fetchWithTimeout(url, {
+    headers: {
+      "TRON-PRO-API-KEY": TRONGRID_API_KEY
+    }
+  });
 
   if (!response.ok) {
     throw new Error(
@@ -322,35 +329,27 @@ async function findDeposit(request) {
     );
   }
 
-  const data =
-    await response.json();
-
-  const transfers =
-    data.data || [];
+  const data = await response.json();
+  const transfers = data.data || [];
 
   for (const transfer of transfers) {
     if (
       transfer.to !== RELAY_ADDRESS ||
       transfer.from !== request.sender_address ||
-      String(transfer.value) !==
-        String(request.amount_raw)
+      String(transfer.value) !== String(request.amount_raw)
     ) {
       continue;
     }
 
-    const txid =
-      transfer.transaction_id;
+    const txid = transfer.transaction_id;
 
-    if (!txid) {
-      continue;
-    }
+    if (!txid) continue;
 
-    const verification =
-      await verifyTransfer(
-        txid,
-        request.sender_address,
-        request.amount_raw
-      );
+    const verification = await verifyTransfer(
+      txid,
+      request.sender_address,
+      request.amount_raw
+    );
 
     if (verification.valid) {
       return txid;
@@ -363,24 +362,16 @@ async function findDeposit(request) {
 /*
  * Send USDT from the relay wallet.
  */
-async function sendUSDT(
-  recipient,
-  amountRaw
-) {
-  const contract =
-    await tronWeb
-      .contract()
-      .at(USDT_CONTRACT);
+async function sendUSDT(recipient, amountRaw) {
+  const contract = await tronWeb
+    .contract()
+    .at(USDT_CONTRACT);
 
-  const transaction =
-    await contract
-      .transfer(
-        recipient,
-        amountRaw
-      )
-      .send({
-        feeLimit: FEE_LIMIT_SUN
-      });
+  const transaction = await contract
+    .transfer(recipient, amountRaw)
+    .send({
+      feeLimit: FEE_LIMIT_SUN
+    });
 
   return transaction;
 }
@@ -408,88 +399,55 @@ async function expireOldRequests() {
  */
 async function processPayment(request) {
   try {
-    /*
-     * Step 1:
-     * Look for the sender's deposit.
-     */
     if (request.status === "waiting") {
-      const depositTxid =
-        await findDeposit(request);
+      const depositTxid = await findDeposit(request);
 
-      if (!depositTxid) {
-        return;
-      }
+      if (!depositTxid) return;
 
-      const updateResult =
-        await pool.query(
-          `
-          UPDATE payment_requests
-          SET
-            status = 'deposit_confirmed',
-            deposit_txid = $1,
-            updated_at = NOW()
-          WHERE id = $2
-            AND status = 'waiting'
-          RETURNING *
-          `,
-          [
-            depositTxid,
-            request.id
-          ]
-        );
+      const updateResult = await pool.query(
+        `
+        UPDATE payment_requests
+        SET
+          status = 'deposit_confirmed',
+          deposit_txid = $1,
+          updated_at = NOW()
+        WHERE id = $2
+          AND status = 'waiting'
+        RETURNING *
+        `,
+        [depositTxid, request.id]
+      );
 
-      if (updateResult.rowCount === 0) {
-        return;
-      }
+      if (updateResult.rowCount === 0) return;
 
-      request =
-        updateResult.rows[0];
+      request = updateResult.rows[0];
     }
 
-    /*
-     * Step 2:
-     * Lock the request for payout processing.
-     */
-    if (
-      request.status ===
-      "deposit_confirmed"
-    ) {
-      const updateResult =
-        await pool.query(
-          `
-          UPDATE payment_requests
-          SET
-            status = 'payout_processing',
-            updated_at = NOW()
-          WHERE id = $1
-            AND status = 'deposit_confirmed'
-          RETURNING *
-          `,
-          [request.id]
-        );
+    if (request.status === "deposit_confirmed") {
+      const updateResult = await pool.query(
+        `
+        UPDATE payment_requests
+        SET
+          status = 'payout_processing',
+          updated_at = NOW()
+        WHERE id = $1
+          AND status = 'deposit_confirmed'
+        RETURNING *
+        `,
+        [request.id]
+      );
 
-      if (updateResult.rowCount === 0) {
-        return;
-      }
+      if (updateResult.rowCount === 0) return;
 
-      request =
-        updateResult.rows[0];
+      request = updateResult.rows[0];
     }
 
-    /*
-     * Step 3:
-     * Send the requested USDT payout.
-     */
-    if (
-      request.status ===
-      "payout_processing"
-    ) {
+    if (request.status === "payout_processing") {
       try {
-        const payoutTxid =
-          await sendUSDT(
-            request.recipient_address,
-            request.amount_raw
-          );
+        const payoutTxid = await sendUSDT(
+          request.recipient_address,
+          request.amount_raw
+        );
 
         await pool.query(
           `
@@ -500,10 +458,7 @@ async function processPayment(request) {
             updated_at = NOW()
           WHERE id = $2
           `,
-          [
-            payoutTxid,
-            request.id
-          ]
+          [payoutTxid, request.id]
         );
 
         console.log(
@@ -519,12 +474,7 @@ async function processPayment(request) {
             updated_at = NOW()
           WHERE id = $2
           `,
-          [
-            String(
-              error.message || error
-            ),
-            request.id
-          ]
+          [String(error.message || error), request.id]
         );
 
         console.error(
@@ -547,40 +497,32 @@ async function processPayment(request) {
 let workerRunning = false;
 
 async function worker() {
-  if (workerRunning) {
-    return;
-  }
+  if (workerRunning) return;
 
   workerRunning = true;
 
   try {
     await expireOldRequests();
 
-    const result =
-      await pool.query(
-        `
-        SELECT *
-        FROM payment_requests
-        WHERE status IN (
-          'waiting',
-          'deposit_confirmed',
-          'payout_processing'
-        )
-        ORDER BY created_at ASC
-        LIMIT 20
-        `
-      );
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM payment_requests
+      WHERE status IN (
+        'waiting',
+        'deposit_confirmed',
+        'payout_processing'
+      )
+      ORDER BY created_at ASC
+      LIMIT 20
+      `
+    );
 
-    for (
-      const request of result.rows
-    ) {
+    for (const request of result.rows) {
       await processPayment(request);
     }
   } catch (error) {
-    console.error(
-      "Worker error:",
-      error
-    );
+    console.error("Worker error:", error);
   } finally {
     workerRunning = false;
   }
@@ -589,281 +531,200 @@ async function worker() {
 /*
  * API: relay configuration.
  */
-app.get(
-  "/api/config",
-  (req, res) => {
-    res.json({
-      network: "TRON Mainnet",
-      relayAddress: RELAY_ADDRESS,
-      usdtContract: USDT_CONTRACT,
-      decimals: USDT_DECIMALS,
-      maxUsdt: MAX_USDT
-    });
-  }
-);
+app.get("/api/config", (req, res) => {
+  res.json({
+    network: "TRON Mainnet",
+    relayAddress: RELAY_ADDRESS,
+    usdtContract: USDT_CONTRACT,
+    decimals: USDT_DECIMALS,
+    maxUsdt: MAX_USDT
+  });
+});
 
 /*
  * API: create payment request.
  */
-app.post(
-  "/api/requests",
-  async (req, res) => {
-    try {
-      const {
-        senderAddress,
-        recipientAddress,
-        amount
-      } = req.body;
+app.post("/api/requests", async (req, res) => {
+  try {
+    const { senderAddress, recipientAddress, amount } = req.body;
 
-      if (
-        !isValidTronAddress(
-          senderAddress
-        )
-      ) {
-        return res.status(400).json({
-          error:
-            "Invalid sender address"
-        });
-      }
-
-      if (
-        !isValidTronAddress(
-          recipientAddress
-        )
-      ) {
-        return res.status(400).json({
-          error:
-            "Invalid recipient address"
-        });
-      }
-
-      if (
-        senderAddress ===
-        RELAY_ADDRESS
-      ) {
-        return res.status(400).json({
-          error:
-            "Sender cannot be the relay address"
-        });
-      }
-
-      const amountRaw =
-        amountToRaw(amount);
-
-      const id =
-        createId();
-
-      const result =
-        await pool.query(
-          `
-          INSERT INTO payment_requests (
-            id,
-            sender_address,
-            recipient_address,
-            amount_raw,
-            status
-          )
-          VALUES (
-            $1,
-            $2,
-            $3,
-            $4,
-            'waiting'
-          )
-          RETURNING *
-          `,
-          [
-            id,
-            senderAddress,
-            recipientAddress,
-            amountRaw
-          ]
-        );
-
-      const request =
-        result.rows[0];
-
-      res.status(201).json({
-        id: request.id,
-        status: request.status,
-        relayAddress:
-          RELAY_ADDRESS,
-        amount:
-          rawToAmount(
-            request.amount_raw
-          ),
-        amountRaw:
-          request.amount_raw,
-        network:
-          "TRON Mainnet",
-        contract:
-          USDT_CONTRACT
-      });
-    } catch (error) {
-      console.error(error);
-
-      res.status(400).json({
-        error:
-          error.message ||
-          "Unable to create request"
+    if (!isValidTronAddress(senderAddress)) {
+      return res.status(400).json({
+        error: "Invalid sender address"
       });
     }
+
+    if (!isValidTronAddress(recipientAddress)) {
+      return res.status(400).json({
+        error: "Invalid recipient address"
+      });
+    }
+
+    if (senderAddress === RELAY_ADDRESS) {
+      return res.status(400).json({
+        error: "Sender cannot be the relay address"
+      });
+    }
+
+    const amountRaw = amountToRaw(amount);
+    const id = createId();
+
+    const result = await pool.query(
+      `
+      INSERT INTO payment_requests (
+        id,
+        sender_address,
+        recipient_address,
+        amount_raw,
+        status
+      )
+      VALUES (
+        $1,
+        $2,
+        $3,
+        $4,
+        'waiting'
+      )
+      RETURNING *
+      `,
+      [id, senderAddress, recipientAddress, amountRaw]
+    );
+
+    const request = result.rows[0];
+
+    res.status(201).json({
+      id: request.id,
+      status: request.status,
+      relayAddress: RELAY_ADDRESS,
+      amount: rawToAmount(request.amount_raw),
+      amountRaw: request.amount_raw,
+      network: "TRON Mainnet",
+      contract: USDT_CONTRACT
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(400).json({
+      error: error.message || "Unable to create request"
+    });
   }
-);
+});
 
 /*
  * API: payment status.
  */
-app.get(
-  "/api/requests/:id",
-  async (req, res) => {
-    try {
-      const result =
-        await pool.query(
-          `
-          SELECT *
-          FROM payment_requests
-          WHERE id = $1
-          `,
-          [req.params.id]
-        );
+app.get("/api/requests/:id", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+      SELECT *
+      FROM payment_requests
+      WHERE id = $1
+      `,
+      [req.params.id]
+    );
 
-      if (result.rowCount === 0) {
-        return res.status(404).json({
-          error:
-            "Payment request not found"
-        });
-      }
-
-      const request =
-        result.rows[0];
-
-      res.json({
-        id: request.id,
-        status: request.status,
-        senderAddress:
-          request.sender_address,
-        recipientAddress:
-          request.recipient_address,
-        amount:
-          rawToAmount(
-            request.amount_raw
-          ),
-        amountRaw:
-          request.amount_raw,
-        depositTxid:
-          request.deposit_txid,
-        payoutTxid:
-          request.payout_txid,
-        error:
-          request.error_message,
-        createdAt:
-          request.created_at,
-        updatedAt:
-          request.updated_at
-      });
-    } catch (error) {
-      console.error(error);
-
-      res.status(500).json({
-        error:
-          "Unable to retrieve request"
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        error: "Payment request not found"
       });
     }
+
+    const request = result.rows[0];
+
+    res.json({
+      id: request.id,
+      status: request.status,
+      senderAddress: request.sender_address,
+      recipientAddress: request.recipient_address,
+      amount: rawToAmount(request.amount_raw),
+      amountRaw: request.amount_raw,
+      depositTxid: request.deposit_txid,
+      payoutTxid: request.payout_txid,
+      error: request.error_message,
+      createdAt: request.created_at,
+      updatedAt: request.updated_at
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: "Unable to retrieve request"
+    });
   }
-);
+});
 
 /*
  * Health check.
  */
-app.get(
-  "/health",
-  async (req, res) => {
-    try {
-      await pool.query(
-        "SELECT 1"
-      );
+app.get("/health", async (req, res) => {
+  try {
+    await pool.query("SELECT 1");
 
-      res.json({
-        status: "ok",
-        database: "connected",
-        network:
-          "TRON Mainnet",
-        relayAddress:
-          RELAY_ADDRESS
-      });
-    } catch (error) {
-      res.status(500).json({
-        status: "error",
-        database:
-          "disconnected"
-      });
-    }
+    res.json({
+      status: "ok",
+      database: "connected",
+      network: "TRON Mainnet",
+      relayAddress: RELAY_ADDRESS
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "error",
+      database: "disconnected"
+    });
   }
-);
+});
 
 /*
  * Serve frontend.
  */
 app.use(
   express.static(
-    path.join(
-      __dirname,
-      "public"
-    )
+    path.join(__dirname, "public")
   )
 );
 
 /*
  * Start application.
+ *
+ * IMPROVED: listen() is called BEFORE the slow TRON contract load
+ * so the server responds to /api/config immediately.
  */
 async function start() {
   try {
     await initDatabase();
-
-    const contract =
-      await tronWeb
-        .contract()
-        .at(USDT_CONTRACT);
-
-    if (!contract) {
-      throw new Error(
-        "Unable to load USDT contract"
-      );
-    }
-
-    console.log(
-      "USDT contract loaded successfully"
-    );
-
-    app.listen(
-      PORT,
-      () => {
-        console.log(
-          `Server listening on port ${PORT}`
-        );
-
-        console.log(
-          `Relay address: ${RELAY_ADDRESS}`
-        );
-      }
-    );
-
-    setInterval(
-      worker,
-      POLL_INTERVAL_MS
-    );
-
-    worker();
   } catch (error) {
-    console.error(
-      "Startup failed:",
-      error
-    );
-
-    process.exit(1);
+    console.error("Database init failed:", error);
   }
+
+  /*
+   * Start listening IMMEDIATELY after DB init.
+   * The USDT contract load happens in the background.
+   */
+  app.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+    console.log(`Relay address: ${RELAY_ADDRESS}`);
+  });
+
+  /*
+   * Load the contract in the background with a timeout.
+   * If it fails, the server is still up — it will retry
+   * lazily when sendUSDT() is called.
+   */
+  try {
+    const contract = await tronWeb
+      .contract()
+      .at(USDT_CONTRACT);
+
+    if (contract) {
+      console.log("USDT contract loaded successfully");
+    }
+  } catch (error) {
+    console.error("Contract preload failed (will retry lazily):", error);
+  }
+
+  setInterval(worker, POLL_INTERVAL_MS);
+  worker();
 }
 
 start();
-
