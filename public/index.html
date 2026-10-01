@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -463,12 +462,15 @@ function setStatus(message, type = "") {
 /*
  * ------------------------------------------------------------
  * LOAD SERVER CONFIGURATION
+ * (FIXED: field names + error visibility + logging)
  * ------------------------------------------------------------
  */
 
 async function loadConfig() {
 
   try {
+
+    console.log("[config] Fetching /api/config...");
 
     const response =
       await fetch("/api/config", {
@@ -479,40 +481,76 @@ async function loadConfig() {
         }
       });
 
-    const data =
-      await response.json();
+    console.log("[config] HTTP status:", response.status);
+
+    const text =
+      await response.text();
+
+    console.log("[config] Raw body:", text);
+
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch (parseError) {
+      throw new Error(
+        "Server did not return JSON. First 100 chars: " +
+        text.slice(0, 100)
+      );
+    }
 
     if (!response.ok) {
 
       throw new Error(
         data.error ||
-        "Could not load server configuration."
+        "Server returned HTTP " + response.status
       );
 
     }
 
+    console.log("[config] Parsed data:", data);
+
     relayAddressBox.textContent =
-      data.relayAddress;
+      data.relayAddress || "MISSING relayAddress";
 
     relayShortBox.textContent =
-      data.relayAddress;
+      data.relayAddress || "MISSING relayAddress";
 
+    /*
+     * FIX: backend sends "usdtContract", not "contract"
+     */
     contractBox.textContent =
-      data.contract;
+      data.usdtContract || "MISSING usdtContract";
 
     decimalsBox.textContent =
-      data.decimals;
+      data.decimals !== undefined ? data.decimals : "?";
 
+    /*
+     * FIX: backend sends "maxUsdt", not "maxUSDT"
+     */
     maximumBox.textContent =
-      data.maxUSDT;
+      data.maxUsdt !== undefined ? data.maxUsdt : "MISSING maxUsdt";
+
+    setStatus(
+      "Server configuration loaded successfully.",
+      "success"
+    );
 
   } catch (error) {
 
+    console.error("[config] Error:", error);
+
     relayAddressBox.textContent =
-      "Unavailable";
+      "ERROR: " + error.message;
 
     relayShortBox.textContent =
-      "Unavailable";
+      "ERROR";
+
+    contractBox.textContent =
+      "ERROR";
+
+    maximumBox.textContent =
+      "ERROR";
 
     setStatus(
       "Unable to connect to the relay server.\n\n" +
@@ -539,7 +577,8 @@ async function copyRelayAddress() {
   if (
     !address ||
     address === "Loading relay address..." ||
-    address === "Unavailable"
+    address === "Unavailable" ||
+    address.startsWith("ERROR")
   ) {
     return;
   }
@@ -1010,4 +1049,3 @@ loadConfig();
 
 </body>
 </html>
-
