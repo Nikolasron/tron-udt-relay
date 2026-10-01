@@ -4,7 +4,25 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
  <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-  <script>eruda.init();</script>
+<script>
+  window.addEventListener('load', function () {
+    if (typeof eruda !== 'undefined') {
+      eruda.init({
+        tool: ['console', 'network', 'elements'],
+        useShadowDom: true,
+        autoScale: true,
+        defaults: {
+          displaySize: 50,
+          transparency: 0.9,
+          theme: 'Dark'
+        }
+      });
+      console.log('Eruda initialized OK');
+    } else {
+      alert('Eruda failed to load from CDN');
+    }
+  });
+</script>
   <title>USDT TRC-20 Relay</title>
 
   <meta
