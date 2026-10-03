@@ -100,6 +100,7 @@
       font-family: monospace;
       font-size: 0.85rem;
       color: var(--accent-color);
+      word-break: break-all;
     }
 
     .copy-btn {
@@ -111,6 +112,7 @@
       cursor: pointer;
       font-size: 0.75rem;
       transition: all 0.2s;
+      white-space: nowrap;
     }
 
     .copy-btn:hover {
@@ -225,7 +227,7 @@
         <span>Relay Deposit Address</span>
         <div class="relay-box">
           <span id="relayAddress">Loading relay address...</span>
-          <button class="copy-btn" onclick="copyRelayAddress()">Copy</button>
+          <button id="copyBtn" class="copy-btn" onclick="copyRelayAddress()">Copy</button>
         </div>
       </div>
       <div class="info-item">
@@ -251,7 +253,7 @@
 
     <div class="form-group">
       <label for="amount">Amount (USDT)</label>
-      <input type="number" id="amount" step="0.000001" placeholder="10.00" />
+      <input type="number" id="amount" step="0.000001" min="0.000001" placeholder="10.00" />
     </div>
 
     <button id="createButton" class="primary-btn" onclick="createRequest()">Create Payment Request</button>
@@ -276,6 +278,7 @@
     const maximumBox      = document.getElementById("maximum");
     const statusBox       = document.getElementById("status");
     const createButton    = document.getElementById("createButton");
+    const copyBtn         = document.getElementById("copyBtn");
 
 
     /* ---------- HELPER FUNCTIONS ---------- */
@@ -289,6 +292,10 @@
     function formatAddress(addr) {
       if (!addr || addr.length < 10) return addr;
       return addr.slice(0, 6) + "..." + addr.slice(-4);
+    }
+
+    function isValidTronAddress(addr) {
+      return /^T[a-zA-Z0-9]{33}$/.test(addr);
     }
 
 
@@ -325,7 +332,7 @@
       } catch (error) {
         console.error("[config] Error:", error);
 
-        relayAddressBox.textContent = "ERROR: " + error.message;
+        relayAddressBox.textContent = "ERROR";
         contractBox.textContent     = "ERROR";
         maximumBox.textContent      = "ERROR";
 
@@ -346,14 +353,16 @@
         !address ||
         address === "Loading relay address..." ||
         address === "Unavailable" ||
-        address.startsWith("ERROR")
+        address === "ERROR"
       ) return;
 
       try {
         await navigator.clipboard.writeText(address);
-        setStatus("Relay address copied to clipboard.", "success");
+        const originalText = copyBtn.textContent;
+        copyBtn.textContent = "Copied!";
+        setTimeout(() => { copyBtn.textContent = originalText; }, 2000);
       } catch {
-        setStatus("Could not copy automatically. Please copy manually.");
+        setStatus("Could not copy automatically. Please copy manually.", "warning");
       }
     }
 
@@ -363,11 +372,35 @@
     async function createRequest() {
       const sender    = senderInput.value.trim();
       const recipient = recipientInput.value.trim();
-      const amount    = amountInput.value.trim();
+      const amountVal = parseFloat(amountInput.value.trim());
 
-      if (!sender)    { setStatus("Enter the sender TRON address.", "error");    senderInput.focus();    return; }
-      if (!recipient) { setStatus("Enter the recipient TRON address.", "error"); recipientInput.focus(); return; }
-      if (!amount)    { setStatus("Enter the USDT amount.", "error");            amountInput.focus();    return; }
+      if (!sender) {
+        setStatus("Enter the sender TRON address.", "error");
+        senderInput.focus();
+        return;
+      }
+      if (!isValidTronAddress(sender)) {
+        setStatus("Invalid expected sender address. TRON addresses must start with 'T' and be 34 characters long.", "error");
+        senderInput.focus();
+        return;
+      }
+
+      if (!recipient) {
+        setStatus("Enter the recipient TRON address.", "error");
+        recipientInput.focus();
+        return;
+      }
+      if (!isValidTronAddress(recipient)) {
+        setStatus("Invalid recipient TRON address. TRON addresses must start with 'T' and be 34 characters long.", "error");
+        recipientInput.focus();
+        return;
+      }
+
+      if (isNaN(amountVal) || amountVal <= 0) {
+        setStatus("Enter a valid positive USDT amount.", "error");
+        amountInput.focus();
+        return;
+      }
 
       if (sender.toLowerCase() === recipient.toLowerCase()) {
         setStatus("Sender and recipient must be different.", "error");
@@ -387,7 +420,7 @@
           body: JSON.stringify({
             senderAddress: sender,
             recipientAddress: recipient,
-            amount: amount
+            amount: amountVal.toString()
           })
         });
 
@@ -458,8 +491,6 @@
         if (data.payoutTxid)  message += "Payout TX:\n"  + data.payoutTxid  + "\n\n";
         if (data.error)       message += "Server message:\n" + data.error + "\n\n";
 
-        // Aligned with backend status enums:
-        // 'waiting' | 'deposit_confirmed' | 'payout_processing' | 'completed' | 'failed' | 'expired'
         if (data.status === "waiting") {
           message += "Waiting for confirmed USDT deposit on-chain...";
         } else if (data.status === "deposit_confirmed") {
