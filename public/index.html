@@ -3,13 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TRON USDT Flexible-Sender Payment Relay</title>
+  <title>TRON USDT Payment Relay</title>
   <style>
     :root {
       --bg-color: #0f172a;
       --card-bg: #1e293b;
       --accent-color: #38bdf8;
       --accent-hover: #0284c7;
+      --tron-red: #ef4444;
+      --tron-red-hover: #dc2626;
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
       --border-color: #334155;
@@ -48,7 +50,6 @@
     h1 {
       font-size: 1.5rem;
       margin-bottom: 8px;
-      color: var(--text-main);
     }
 
     p.subtitle {
@@ -158,16 +159,34 @@
       font-size: 1rem;
       cursor: pointer;
       transition: background-color 0.2s;
-      margin-top: 10px;
+      margin-top: 6px;
     }
 
     button.primary-btn:hover {
       background-color: var(--accent-hover);
     }
 
-    button.primary-btn:disabled {
+    button.tronlink-btn {
+      background-color: var(--tron-red);
+      color: #ffffff;
+    }
+
+    button.tronlink-btn:hover {
+      background-color: var(--tron-red-hover);
+    }
+
+    button:disabled {
       opacity: 0.5;
       cursor: not-allowed;
+    }
+
+    .deep-link {
+      display: none;
+      text-align: center;
+      margin-top: 12px;
+      font-size: 0.85rem;
+      color: var(--accent-color);
+      text-decoration: underline;
     }
 
     .status-box {
@@ -218,7 +237,7 @@
 
     <div class="info-notice">
       <strong>Important:</strong><br>
-      Send the exact USDT amount using the TRON TRC-20 network to the relay address shown below. Payment can be sent from any wallet address.
+      Pay instantly with TronLink or manually transfer the exact USDT amount (TRC-20) to the deposit address below.
     </div>
 
     <!-- CONFIGURATION METRICS -->
@@ -256,7 +275,18 @@
       <input type="number" id="amount" step="0.000001" min="0.000001" placeholder="10.00" />
     </div>
 
-    <button id="createButton" class="primary-btn" onclick="createRequest()">Create Payment Request</button>
+    <!-- ACTION BUTTONS -->
+    <button id="tronlinkPayBtn" class="primary-btn tronlink-btn" onclick="payWithTronLink()">
+      ⚡ Pay Instantly with TronLink
+    </button>
+
+    <button id="createButton" class="primary-btn" onclick="createRequest()">
+      Generate Manual Transfer Request
+    </button>
+
+    <a id="openInTronLink" href="#" target="_blank" class="deep-link">
+      📱 Mobile user? Tap to open in TronLink App
+    </a>
 
     <!-- LIVE STATUS DISPLAY -->
     <div id="status" class="status-box">Initializing gateway client...</div>
@@ -269,7 +299,6 @@
     let pollTimer = null;
 
     /* ---------- ELEMENTS ---------- */
-
     const senderInput     = document.getElementById("sender");
     const recipientInput  = document.getElementById("recipient");
     const amountInput     = document.getElementById("amount");
@@ -279,10 +308,9 @@
     const statusBox       = document.getElementById("status");
     const createButton    = document.getElementById("createButton");
     const copyBtn         = document.getElementById("copyBtn");
-
+    const deepLinkEl      = document.getElementById("openInTronLink");
 
     /* ---------- HELPER FUNCTIONS ---------- */
-
     function setStatus(message, type = "") {
       statusBox.className = "status-box";
       if (type) statusBox.classList.add(type);
@@ -298,9 +326,14 @@
       return /^T[a-zA-Z0-9]{33}$/.test(addr);
     }
 
+    /* ---------- MOBILE DEEP LINK DETECTOR ---------- */
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && !window.tronWeb) {
+      const currentUrl = encodeURIComponent(window.location.href);
+      deepLinkEl.href = `tronlinkoutside://pull.activity?param={"url":"${currentUrl}"}`;
+      deepLinkEl.style.display = "block";
+    }
 
-    /* ---------- LOAD SERVER CONFIGURATION ---------- */
-
+    /* ---------- LOAD SERVER CONFIG ---------- */
     async function loadConfig() {
       try {
         const response = await fetch("/api/config", {
@@ -308,90 +341,55 @@
           headers: { "Accept": "application/json" }
         });
 
-        const text = await response.text();
-        let data;
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Server error");
 
-        try {
-          data = JSON.parse(text);
-        } catch {
-          throw new Error("Server did not return valid JSON.");
-        }
+        relayAddressBox.textContent = data.relayAddress || "Unavailable";
+        contractBox.textContent     = formatAddress(data.usdtContract) || "Unavailable";
+        maximumBox.textContent      = data.maxUsdt !== undefined ? data.maxUsdt + " USDT" : "Unavailable";
 
-        if (!response.ok) {
-          throw new Error(data.error || "Server returned HTTP " + response.status);
-        }
-
-        const relayAddr = data.relayAddress || "Unavailable";
-        relayAddressBox.textContent = relayAddr;
-
-        contractBox.textContent = formatAddress(data.usdtContract) || "Unavailable";
-        maximumBox.textContent  = data.maxUsdt !== undefined ? data.maxUsdt + " USDT" : "Unavailable";
-
-        setStatus("Server configuration loaded successfully.", "success");
-
+        setStatus("Ready. Enter details to pay instantly or generate a request.", "success");
       } catch (error) {
-        console.error("[config] Error:", error);
-
         relayAddressBox.textContent = "ERROR";
         contractBox.textContent     = "ERROR";
         maximumBox.textContent      = "ERROR";
-
-        setStatus(
-          "Unable to connect to the relay server.\n\n" + error.message,
-          "error"
-        );
+        setStatus("Unable to load gateway config.\n" + error.message, "error");
       }
     }
 
-
     /* ---------- COPY RELAY ADDRESS ---------- */
-
     async function copyRelayAddress() {
       const address = relayAddressBox.textContent.trim();
-
-      if (
-        !address ||
-        address === "Loading relay address..." ||
-        address === "Unavailable" ||
-        address === "ERROR"
-      ) return;
+      if (!address || address === "ERROR") return;
 
       try {
         await navigator.clipboard.writeText(address);
-        const originalText = copyBtn.textContent;
+        const orig = copyBtn.textContent;
         copyBtn.textContent = "Copied!";
-        setTimeout(() => { copyBtn.textContent = originalText; }, 2000);
+        setTimeout(() => { copyBtn.textContent = orig; }, 2000);
       } catch {
-        setStatus("Could not copy automatically. Please copy manually.", "warning");
+        setStatus("Copy failed. Please copy manually.", "warning");
       }
     }
 
+    /* ---------- INSTANT TRONLINK PAYMENT ---------- */
+    async function payWithTronLink() {
+      if (!window.tronWeb || !window.tronWeb.defaultAddress.base58) {
+        setStatus(
+          "TronLink wallet not detected.\n\n" +
+          "If on Mobile: Tap the 'Open in TronLink App' link below.\n" +
+          "If on Desktop: Please install the TronLink browser extension.",
+          "warning"
+        );
+        return;
+      }
 
-    /* ---------- CREATE PAYMENT REQUEST ---------- */
-
-    async function createRequest() {
-      const sender    = senderInput.value.trim();
       const recipient = recipientInput.value.trim();
       const amountVal = parseFloat(amountInput.value.trim());
+      const relayAddr = relayAddressBox.textContent.trim();
 
-      if (!sender) {
-        setStatus("Enter the sender TRON address.", "error");
-        senderInput.focus();
-        return;
-      }
-      if (!isValidTronAddress(sender)) {
-        setStatus("Invalid expected sender address. TRON addresses must start with 'T' and be 34 characters long.", "error");
-        senderInput.focus();
-        return;
-      }
-
-      if (!recipient) {
-        setStatus("Enter the recipient TRON address.", "error");
-        recipientInput.focus();
-        return;
-      }
-      if (!isValidTronAddress(recipient)) {
-        setStatus("Invalid recipient TRON address. TRON addresses must start with 'T' and be 34 characters long.", "error");
+      if (!recipient || !isValidTronAddress(recipient)) {
+        setStatus("Enter a valid recipient TRON address.", "error");
         recipientInput.focus();
         return;
       }
@@ -402,58 +400,98 @@
         return;
       }
 
-      if (sender.toLowerCase() === recipient.toLowerCase()) {
-        setStatus("Sender and recipient must be different.", "error");
+      try {
+        setStatus("Connecting to TronLink...");
+
+        // Connect wallet
+        if (window.tronLink && window.tronLink.request) {
+          await window.tronLink.request({ method: 'tron_requestAccounts' });
+        }
+
+        const userWallet = window.tronWeb.defaultAddress.base58;
+        senderInput.value = userWallet; // Auto-fill sender input
+
+        setStatus("Please confirm the USDT transaction prompt in TronLink...");
+
+        // Contract call
+        const usdtContractAddr = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
+        const contract = await window.tronWeb.contract().at(usdtContractAddr);
+        const amountSun = Math.floor(amountVal * 1e6); // 6 Decimals for USDT
+
+        // Prompts wallet window directly
+        const txid = await contract.transfer(relayAddr, amountSun).send();
+
+        setStatus(
+          "TRANSACTION SUBMITTED!\n\n" +
+          "TX ID:\n" + txid + "\n\n" +
+          "Amount: " + amountVal + " USDT\n" +
+          "Relay Address: " + relayAddr + "\n\n" +
+          "Creating tracking request on server..."
+        );
+
+        // Register request on backend for tracking
+        await createRequest(txid);
+
+      } catch (error) {
+        console.error("TronLink Error:", error);
+        setStatus("Payment cancelled or failed:\n" + (error.message || error), "error");
+      }
+    }
+
+    /* ---------- CREATE PAYMENT REQUEST (MANUAL / AUTO) ---------- */
+    async function createRequest(existingTxid = null) {
+      const sender    = senderInput.value.trim() || (window.tronWeb?.defaultAddress?.base58 || "");
+      const recipient = recipientInput.value.trim();
+      const amountVal = parseFloat(amountInput.value.trim());
+
+      if (!recipient || !isValidTronAddress(recipient)) {
+        setStatus("Enter a valid recipient TRON address.", "error");
+        recipientInput.focus();
+        return;
+      }
+
+      if (isNaN(amountVal) || amountVal <= 0) {
+        setStatus("Enter a valid positive USDT amount.", "error");
+        amountInput.focus();
         return;
       }
 
       createButton.disabled = true;
-      setStatus("Creating payment request...");
 
       try {
         const response = await fetch("/api/requests", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            senderAddress: sender,
+            senderAddress: sender || "TronLinkUser",
             recipientAddress: recipient,
             amount: amountVal.toString()
           })
         });
 
         const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || "The server rejected the request.");
-        }
+        if (!response.ok) throw new Error(data.error || "Request failed");
 
         currentRequestId = data.id;
 
-        setStatus(
-          "PAYMENT REQUEST CREATED\n\n" +
-          "Request ID:\n" + data.id +
-          "\n\nAmount:\n" + data.amount + " USDT" +
-          "\n\nSend exactly:\n" + data.amount + " USDT TRC-20" +
-          "\n\nTo Relay Address:\n" + relayAddressBox.textContent +
-          "\n\nCurrent status:\n" + data.status +
-          "\n\nWaiting for the blockchain deposit..."
-        );
+        let msg = "PAYMENT REQUEST CREATED\n\n";
+        msg += "ID: " + data.id + "\n";
+        msg += "Amount: " + data.amount + " USDT\n";
+        if (existingTxid) msg += "Deposit TX: " + existingTxid + "\n";
+        msg += "\nStatus: " + data.status + "\n";
+        msg += "\nMonitoring blockchain confirmation...";
 
+        setStatus(msg, "success");
         startPolling();
 
       } catch (error) {
-        setStatus("ERROR\n\n" + error.message, "error");
+        setStatus("ERROR: " + error.message, "error");
       } finally {
         createButton.disabled = false;
       }
     }
 
-
-    /* ---------- POLLING ---------- */
-
+    /* ---------- POLLING STATUS ---------- */
     function startPolling() {
       if (pollTimer) clearInterval(pollTimer);
       pollStatus();
@@ -471,56 +509,34 @@
       if (!currentRequestId) return;
 
       try {
-        const response = await fetch(
-          "/api/requests/" + encodeURIComponent(currentRequestId),
-          { method: "GET", headers: { "Accept": "application/json" } }
-        );
-
+        const response = await fetch("/api/requests/" + encodeURIComponent(currentRequestId));
         const data = await response.json();
 
-        if (!response.ok) {
-          throw new Error(data.error || "Unable to retrieve payment status.");
-        }
+        if (!response.ok) throw new Error(data.error || "Unable to fetch status");
 
-        let message = "PAYMENT REQUEST\n\n";
-        message += "Request ID:\n" + data.id + "\n\n";
-        message += "Amount:\n" + data.amount + " USDT\n\n";
-        message += "Status:\n" + data.status + "\n\n";
+        let msg = "PAYMENT STATUS\n\n";
+        msg += "Request ID: " + data.id + "\n";
+        msg += "Amount: " + data.amount + " USDT\n";
+        msg += "Status: " + data.status + "\n\n";
 
-        if (data.depositTxid) message += "Deposit TX:\n" + data.depositTxid + "\n\n";
-        if (data.payoutTxid)  message += "Payout TX:\n"  + data.payoutTxid  + "\n\n";
-        if (data.error)       message += "Server message:\n" + data.error + "\n\n";
+        if (data.depositTxid) msg += "Deposit TX: " + data.depositTxid + "\n";
+        if (data.payoutTxid)  msg += "Payout TX: " + data.payoutTxid + "\n";
 
-        if (data.status === "waiting") {
-          message += "Waiting for confirmed USDT deposit on-chain...";
-        } else if (data.status === "deposit_confirmed") {
-          message += "Deposit verified!\nPreparing recipient payout...";
-        } else if (data.status === "payout_processing") {
-          message += "Payout processing on TRON network...";
-        } else if (data.status === "completed") {
-          message += "COMPLETED\n\nThe USDT payout has been verified on-chain.";
+        if (data.status === "completed") {
+          msg += "\nCOMPLETED: USDT payout successfully sent to recipient.";
           stopPolling();
         } else if (data.status === "failed") {
-          message += "FAILED\n\nPayout failed. See server message above.";
-          stopPolling();
-        } else if (data.status === "expired") {
-          message += "EXPIRED\n\nThis request expired before a deposit arrived.";
+          msg += "\nFAILED: " + (data.error || "Payout processing error.");
           stopPolling();
         }
 
-        const alertType = data.status === "completed" ? "success" : (data.status === "failed" ? "error" : "");
-        setStatus(message, alertType);
-
+        setStatus(msg, data.status === "completed" ? "success" : (data.status === "failed" ? "error" : ""));
       } catch (error) {
-        setStatus("Payment status temporarily unavailable.\n\n" + error.message, "warning");
+        console.warn("Polling error:", error.message);
       }
     }
 
-
-    /* ---------- INITIALIZE ---------- */
-
     loadConfig();
   </script>
-
 </body>
 </html>
