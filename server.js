@@ -1,4 +1,3 @@
-<script>
 "use strict";
 
 let currentRequestId = null;
@@ -6,16 +5,16 @@ let pollTimer = null;
 
 /* ---------- ELEMENTS ---------- */
 
-const senderInput     = document.getElementById("sender");
-const recipientInput  = document.getElementById("recipient");
-const amountInput     = document.getElementById("amount");
+const senderInput = document.getElementById("sender");
+const recipientInput = document.getElementById("recipient");
+const amountInput = document.getElementById("amount");
 const relayAddressBox = document.getElementById("relayAddress");
-const relayShortBox   = document.getElementById("relayShort");
-const contractBox     = document.getElementById("contract");
-const decimalsBox     = document.getElementById("decimals");
-const maximumBox      = document.getElementById("maximum");
-const statusBox       = document.getElementById("status");
-const createButton    = document.getElementById("createButton");
+const relayShortBox = document.getElementById("relayShort");
+const contractBox = document.getElementById("contract");
+const decimalsBox = document.getElementById("decimals");
+const maximumBox = document.getElementById("maximum");
+const statusBox = document.getElementById("status");
+const createButton = document.getElementById("createButton");
 
 
 /* ---------- HELPER FUNCTIONS ---------- */
@@ -56,11 +55,11 @@ async function loadConfig() {
 
     const relayAddr = data.relayAddress || "Unavailable";
     relayAddressBox.textContent = relayAddr;
-    relayShortBox.textContent   = formatAddress(relayAddr);
+    relayShortBox.textContent = formatAddress(relayAddr);
 
     contractBox.textContent = data.usdtContract || "Unavailable";
     decimalsBox.textContent = data.decimals !== undefined ? data.decimals : "6";
-    maximumBox.textContent  = data.maxUsdt !== undefined ? data.maxUsdt : "Unavailable";
+    maximumBox.textContent = data.maxUsdt !== undefined ? data.maxUsdt : "Unavailable";
 
     setStatus("Server configuration loaded successfully.", "success");
 
@@ -68,9 +67,9 @@ async function loadConfig() {
     console.error("[config] Error:", error);
 
     relayAddressBox.textContent = "ERROR: " + error.message;
-    relayShortBox.textContent   = "ERROR";
-    contractBox.textContent     = "ERROR";
-    maximumBox.textContent      = "ERROR";
+    relayShortBox.textContent = "ERROR";
+    contractBox.textContent = "ERROR";
+    maximumBox.textContent = "ERROR";
 
     setStatus(
       "Unable to connect to the relay server.\n\n" + error.message,
@@ -104,13 +103,13 @@ async function copyRelayAddress() {
 /* ---------- CREATE PAYMENT REQUEST ---------- */
 
 async function createRequest() {
-  const sender    = senderInput.value.trim();
+  const sender = senderInput.value.trim();
   const recipient = recipientInput.value.trim();
-  const amount    = amountInput.value.trim();
+  const amount = amountInput.value.trim();
 
-  if (!sender)    { setStatus("Enter the sender TRON address.", "error");    senderInput.focus();    return; }
+  if (!sender) { setStatus("Enter the sender TRON address.", "error"); senderInput.focus(); return; }
   if (!recipient) { setStatus("Enter the recipient TRON address.", "error"); recipientInput.focus(); return; }
-  if (!amount)    { setStatus("Enter the USDT amount.", "error");            amountInput.focus();    return; }
+  if (!amount) { setStatus("Enter the USDT amount.", "error"); amountInput.focus(); return; }
 
   if (sender.toLowerCase() === recipient.toLowerCase()) {
     setStatus("Sender and recipient must be different.", "error");
@@ -198,11 +197,9 @@ async function pollStatus() {
     message += "Status:\n" + data.status + "\n\n";
 
     if (data.depositTxid) message += "Deposit TX:\n" + data.depositTxid + "\n\n";
-    if (data.payoutTxid)  message += "Payout TX:\n"  + data.payoutTxid  + "\n\n";
-    if (data.error)       message += "Server message:\n" + data.error + "\n\n";
+    if (data.payoutTxid) message += "Payout TX:\n" + data.payoutTxid + "\n\n";
+    if (data.error) message += "Server message:\n" + data.error + "\n\n";
 
-    // Aligned to backend status enums:
-    // 'waiting' | 'deposit_confirmed' | 'payout_processing' | 'completed' | 'failed' | 'expired'
     if (data.status === "waiting") {
       message += "Waiting for confirmed USDT deposit on-chain...";
     } else if (data.status === "deposit_confirmed") {
@@ -232,4 +229,3 @@ async function pollStatus() {
 /* ---------- INITIALIZE ---------- */
 
 loadConfig();
-</script>
