@@ -3,554 +3,493 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <title>USDT TRC-20 Relay</title>
-
-  <meta
-    name="description"
-    content="TRON Mainnet USDT TRC-20 relay"
-  >
-
+  <title>TRON USDT Flexible-Sender Payment Relay</title>
   <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --accent-color: #38bdf8;
+      --accent-hover: #0284c7;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-color: #334155;
+      --error-color: #f87171;
+      --success-color: #4ade80;
+      --warning-color: #fbbf24;
+    }
+
     * {
       box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
 
     body {
-      margin: 0;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
       padding: 20px;
-      background: #0b0f14;
-      color: #ffffff;
-      font-family: Arial, Helvetica, sans-serif;
     }
 
     .container {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 30px;
+      max-width: 550px;
       width: 100%;
-      max-width: 520px;
-      margin: 0 auto;
-    }
-
-    .card {
-      background: #151b23;
-      border: 1px solid #27313d;
-      border-radius: 18px;
-      padding: 22px;
-      margin-bottom: 18px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
     }
 
     h1 {
-      margin: 0;
-      text-align: center;
-      font-size: 23px;
+      font-size: 1.5rem;
+      margin-bottom: 8px;
+      color: var(--text-main);
     }
 
-    .subtitle {
-      margin-top: 8px;
-      text-align: center;
-      color: #9ca8b5;
-      font-size: 13px;
-      line-height: 1.5;
+    p.subtitle {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 24px;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      background-color: rgba(15, 23, 42, 0.6);
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      margin-bottom: 24px;
+      font-size: 0.85rem;
+    }
+
+    .info-item span {
+      display: block;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    .info-item strong {
+      color: var(--text-main);
+      word-break: break-all;
+    }
+
+    .info-item.full-width {
+      grid-column: span 2;
+    }
+
+    .relay-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: #0f172a;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px dashed var(--accent-color);
+      margin-top: 4px;
+    }
+
+    .relay-box span {
+      font-family: monospace;
+      font-size: 0.85rem;
+      color: var(--accent-color);
+    }
+
+    .copy-btn {
+      background: transparent;
+      border: 1px solid var(--accent-color);
+      color: var(--accent-color);
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: var(--accent-color);
+      color: var(--bg-color);
+    }
+
+    .form-group {
+      margin-bottom: 18px;
     }
 
     label {
       display: block;
-      margin-top: 17px;
-      margin-bottom: 7px;
-      color: #aeb9c5;
-      font-size: 13px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 6px;
     }
 
     input {
       width: 100%;
-      padding: 14px;
-      border-radius: 11px;
-      border: 1px solid #354150;
-      background: #0e141b;
-      color: #ffffff;
+      padding: 12px;
+      background-color: #0f172a;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-main);
+      font-size: 0.95rem;
       outline: none;
-      font-size: 14px;
+      transition: border-color 0.2s;
     }
 
     input:focus {
-      border-color: #2196f3;
+      border-color: var(--accent-color);
     }
 
-    button {
+    button.primary-btn {
       width: 100%;
       padding: 14px;
-      margin-top: 18px;
-      border: 0;
-      border-radius: 11px;
-      background: #2196f3;
-      color: #ffffff;
-      font-size: 14px;
-      font-weight: bold;
+      background-color: var(--accent-color);
+      color: #0f172a;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 1rem;
       cursor: pointer;
+      transition: background-color 0.2s;
+      margin-top: 10px;
     }
 
-    button:hover {
-      opacity: 0.92;
+    button.primary-btn:hover {
+      background-color: var(--accent-hover);
     }
 
-    button:disabled {
+    button.primary-btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }
 
-    .relay-box {
-      margin-top: 8px;
-      padding: 14px;
-      border-radius: 11px;
-      background: #090d12;
-      border: 1px solid #27313d;
-      color: #70d6ff;
-      font-size: 12px;
-      word-break: break-all;
-      line-height: 1.5;
-    }
-
-    .status {
-      margin-top: 18px;
-      padding: 15px;
-      border-radius: 11px;
-      background: #090d12;
-      border: 1px solid #27313d;
-      color: #dce4ec;
+    .status-box {
+      margin-top: 24px;
+      padding: 16px;
+      border-radius: 8px;
+      background-color: #0f172a;
+      border: 1px solid var(--border-color);
       white-space: pre-wrap;
-      word-break: break-word;
-      font-size: 13px;
-      line-height: 1.6;
-      min-height: 90px;
+      font-family: monospace;
+      font-size: 0.85rem;
+      line-height: 1.4;
+      color: var(--text-muted);
     }
 
-    .info {
-      padding: 13px;
-      margin-top: 15px;
-      background: #101720;
-      border-radius: 10px;
-      color: #9ca8b5;
-      font-size: 12px;
-      line-height: 1.6;
+    .status-box.success {
+      border-color: var(--success-color);
+      color: var(--success-color);
     }
 
-    .warning { color: #f4c46d; }
-    .success { color: #62e6a7; }
-    .error   { color: #ff7b7b; }
-
-    .small {
-      color: #7e8996;
-      font-size: 11px;
-      line-height: 1.6;
-      word-break: break-all;
+    .status-box.error {
+      border-color: var(--error-color);
+      color: var(--error-color);
     }
 
-    .copy-row {
-      display: flex;
-      gap: 8px;
-      margin-top: 10px;
+    .status-box.warning {
+      border-color: var(--warning-color);
+      color: var(--warning-color);
     }
 
-    .copy-row button {
-      margin-top: 0;
-      width: auto;
-      flex: 0 0 auto;
-      padding: 11px 15px;
-      background: #303b49;
-    }
-
-    .copy-row .address {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .address {
-      padding: 11px;
-      background: #090d12;
-      border: 1px solid #27313d;
-      border-radius: 9px;
-      color: #70d6ff;
-      font-size: 11px;
-      word-break: break-all;
-    }
-
-    footer {
-      text-align: center;
-      color: #687482;
-      font-size: 10px;
-      padding: 10px;
+    .info-notice {
+      background-color: rgba(251, 191, 36, 0.1);
+      border: 1px solid rgba(251, 191, 36, 0.3);
+      color: var(--warning-color);
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      margin-bottom: 20px;
+      line-height: 1.4;
     }
   </style>
 </head>
-
 <body>
 
-<div class="container">
+  <div class="container">
+    <h1>USDT Payment Relay</h1>
+    <p class="subtitle">Flexible TRON TRC-20 payment gateway</p>
 
-  <div class="card">
-
-    <h1>USDT TRC-20 Relay</h1>
-
-    <div class="subtitle">
-      TRON Mainnet
-      <br>
-      Sender → Relay → Recipient
-    </div>
-
-    <label for="sender">Sender TRON Address</label>
-    <input
-      id="sender"
-      type="text"
-      placeholder="Enter sender T... address"
-      autocomplete="off"
-      spellcheck="false"
-    >
-
-    <label for="recipient">Recipient TRON Address</label>
-    <input
-      id="recipient"
-      type="text"
-      placeholder="Enter recipient T... address"
-      autocomplete="off"
-      spellcheck="false"
-    >
-
-    <label for="amount">Amount — USDT</label>
-    <input
-      id="amount"
-      type="number"
-      min="0.000001"
-      step="0.000001"
-      placeholder="Example: 10"
-      inputmode="decimal"
-    >
-
-    <label>Relay / Deposit Address</label>
-    <div id="relayAddress" class="relay-box">
-      Loading relay address...
-    </div>
-
-    <div class="copy-row">
-      <div id="relayShort" class="address">Loading...</div>
-      <button type="button" onclick="copyRelayAddress()">Copy</button>
-    </div>
-
-    <button id="createButton" type="button" onclick="createRequest()">
-      Create Payment Request
-    </button>
-
-    <div id="status" class="status">Ready.</div>
-
-    <div class="info warning">
+    <div class="info-notice">
       <strong>Important:</strong><br>
-      Send the requested USDT amount using the
-      TRON TRC-20 network to the relay address shown
-      above. The blockchain sender must match the
-      sender address entered in this form.
+      Send the exact USDT amount using the TRON TRC-20 network to the relay address shown below. Payment can be sent from any wallet address.
     </div>
 
-  </div>
-
-
-  <div class="card">
-    <div class="small">
-
-      Network:
-      <strong>TRON Mainnet</strong>
-      <br><br>
-
-      Token:
-      <strong>USDT TRC-20</strong>
-      <br><br>
-
-      Contract:
-      <span id="contract">Loading...</span>
-      <br><br>
-
-      Decimals:
-      <span id="decimals">6</span>
-      <br><br>
-
-      Maximum:
-      <span id="maximum">Loading...</span>
-      USDT
-
+    <!-- CONFIGURATION METRICS -->
+    <div class="info-grid">
+      <div class="info-item full-width">
+        <span>Relay Deposit Address</span>
+        <div class="relay-box">
+          <span id="relayAddress">Loading relay address...</span>
+          <button class="copy-btn" onclick="copyRelayAddress()">Copy</button>
+        </div>
+      </div>
+      <div class="info-item">
+        <span>TRC-20 Contract</span>
+        <strong id="contract">Loading...</strong>
+      </div>
+      <div class="info-item">
+        <span>Max Limit</span>
+        <strong id="maximum">Loading...</strong>
+      </div>
     </div>
-  </div>
 
-
-  <div class="card">
-    <div class="small">
-      <strong>How it works</strong>
-      <br><br>
-      1. Enter the sender address.
-      <br>
-      2. Enter the recipient address.
-      <br>
-      3. Enter the USDT amount.
-      <br>
-      4. Create the payment request.
-      <br>
-      5. Send the exact amount of USDT TRC-20
-      to the displayed relay address.
-      <br>
-      6. The server verifies the blockchain deposit.
-      <br>
-      7. The relay sends the verified amount
-      to the recipient.
-      <br>
-      8. The browser displays the final status.
+    <!-- FORM INPUTS -->
+    <div class="form-group">
+      <label for="sender">Expected Sender Address (Reference)</label>
+      <input type="text" id="sender" placeholder="T..." />
     </div>
+
+    <div class="form-group">
+      <label for="recipient">Recipient TRON Address</label>
+      <input type="text" id="recipient" placeholder="T..." />
+    </div>
+
+    <div class="form-group">
+      <label for="amount">Amount (USDT)</label>
+      <input type="number" id="amount" step="0.000001" placeholder="10.00" />
+    </div>
+
+    <button id="createButton" class="primary-btn" onclick="createRequest()">Create Payment Request</button>
+
+    <!-- LIVE STATUS DISPLAY -->
+    <div id="status" class="status-box">Initializing gateway client...</div>
   </div>
 
-  <footer>TRON Mainnet · USDT TRC-20</footer>
+  <script>
+    "use strict";
 
-</div>
+    let currentRequestId = null;
+    let pollTimer = null;
 
+    /* ---------- ELEMENTS ---------- */
 
-<script>
-
-"use strict";
-
-let currentRequestId = null;
-let pollTimer = null;
-
-/* ---------- ELEMENTS ---------- */
-
-const senderInput     = document.getElementById("sender");
-const recipientInput  = document.getElementById("recipient");
-const amountInput     = document.getElementById("amount");
-const relayAddressBox = document.getElementById("relayAddress");
-const relayShortBox   = document.getElementById("relayShort");
-const contractBox     = document.getElementById("contract");
-const decimalsBox     = document.getElementById("decimals");
-const maximumBox      = document.getElementById("maximum");
-const statusBox       = document.getElementById("status");
-const createButton    = document.getElementById("createButton");
+    const senderInput     = document.getElementById("sender");
+    const recipientInput  = document.getElementById("recipient");
+    const amountInput     = document.getElementById("amount");
+    const relayAddressBox = document.getElementById("relayAddress");
+    const contractBox     = document.getElementById("contract");
+    const maximumBox      = document.getElementById("maximum");
+    const statusBox       = document.getElementById("status");
+    const createButton    = document.getElementById("createButton");
 
 
-/* ---------- STATUS ---------- */
+    /* ---------- HELPER FUNCTIONS ---------- */
 
-function setStatus(message, type = "") {
-  statusBox.className = "status";
-  if (type) statusBox.classList.add(type);
-  statusBox.textContent = message;
-}
-
-
-/* ---------- LOAD SERVER CONFIGURATION ---------- */
-
-async function loadConfig() {
-  try {
-    console.log("[config] Fetching /api/config...");
-
-    const response = await fetch("/api/config", {
-      method: "GET",
-      headers: { "Accept": "application/json" }
-    });
-
-    console.log("[config] HTTP status:", response.status);
-
-    const text = await response.text();
-    console.log("[config] Raw body:", text);
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (parseError) {
-      throw new Error(
-        "Server did not return JSON. First 100 chars: " +
-        text.slice(0, 100)
-      );
+    function setStatus(message, type = "") {
+      statusBox.className = "status-box";
+      if (type) statusBox.classList.add(type);
+      statusBox.textContent = message;
     }
 
-    if (!response.ok) {
-      throw new Error(
-        data.error || "Server returned HTTP " + response.status
-      );
+    function formatAddress(addr) {
+      if (!addr || addr.length < 10) return addr;
+      return addr.slice(0, 6) + "..." + addr.slice(-4);
     }
 
-    console.log("[config] Parsed data:", data);
 
-    relayAddressBox.textContent = data.relayAddress || "MISSING relayAddress";
-    relayShortBox.textContent   = data.relayAddress || "MISSING relayAddress";
+    /* ---------- LOAD SERVER CONFIGURATION ---------- */
 
-    contractBox.textContent =
-      data.usdtContract || "MISSING usdtContract";
+    async function loadConfig() {
+      try {
+        const response = await fetch("/api/config", {
+          method: "GET",
+          headers: { "Accept": "application/json" }
+        });
 
-    decimalsBox.textContent =
-      data.decimals !== undefined ? data.decimals : "?";
+        const text = await response.text();
+        let data;
 
-    maximumBox.textContent =
-      data.maxUsdt !== undefined ? data.maxUsdt : "MISSING maxUsdt";
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error("Server did not return valid JSON.");
+        }
 
-    setStatus("Server configuration loaded successfully.", "success");
+        if (!response.ok) {
+          throw new Error(data.error || "Server returned HTTP " + response.status);
+        }
 
-  } catch (error) {
-    console.error("[config] Error:", error);
+        const relayAddr = data.relayAddress || "Unavailable";
+        relayAddressBox.textContent = relayAddr;
 
-    relayAddressBox.textContent = "ERROR: " + error.message;
-    relayShortBox.textContent   = "ERROR";
-    contractBox.textContent     = "ERROR";
-    maximumBox.textContent      = "ERROR";
+        contractBox.textContent = formatAddress(data.usdtContract) || "Unavailable";
+        maximumBox.textContent  = data.maxUsdt !== undefined ? data.maxUsdt + " USDT" : "Unavailable";
 
-    setStatus(
-      "Unable to connect to the relay server.\n\n" + error.message,
-      "error"
-    );
-  }
-}
+        setStatus("Server configuration loaded successfully.", "success");
 
+      } catch (error) {
+        console.error("[config] Error:", error);
 
-/* ---------- COPY RELAY ADDRESS ---------- */
+        relayAddressBox.textContent = "ERROR: " + error.message;
+        contractBox.textContent     = "ERROR";
+        maximumBox.textContent      = "ERROR";
 
-async function copyRelayAddress() {
-  const address = relayAddressBox.textContent.trim();
-
-  if (
-    !address ||
-    address === "Loading relay address..." ||
-    address === "Unavailable" ||
-    address.startsWith("ERROR")
-  ) return;
-
-  try {
-    await navigator.clipboard.writeText(address);
-    setStatus("Relay address copied to clipboard.", "success");
-  } catch {
-    setStatus("Could not copy automatically. Please copy manually.");
-  }
-}
-
-
-/* ---------- CREATE PAYMENT REQUEST ---------- */
-
-async function createRequest() {
-  const sender    = senderInput.value.trim();
-  const recipient = recipientInput.value.trim();
-  const amount    = amountInput.value.trim();
-
-  if (!sender)    { setStatus("Enter the sender TRON address.", "error");    senderInput.focus();    return; }
-  if (!recipient) { setStatus("Enter the recipient TRON address.", "error"); recipientInput.focus(); return; }
-  if (!amount)    { setStatus("Enter the USDT amount.", "error");            amountInput.focus();    return; }
-
-  if (sender.toLowerCase() === recipient.toLowerCase()) {
-    setStatus("Sender and recipient must be different.", "error");
-    return;
-  }
-
-  createButton.disabled = true;
-  setStatus("Creating payment request...");
-
-  try {
-    const response = await fetch("/api/requests", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify({
-        senderAddress: sender,
-        recipientAddress: recipient,
-        amount: amount
-      })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || "The server rejected the request.");
+        setStatus(
+          "Unable to connect to the relay server.\n\n" + error.message,
+          "error"
+        );
+      }
     }
 
-    currentRequestId = data.id;
 
-    setStatus(
-      "PAYMENT REQUEST CREATED\n\n" +
-      "Request ID:\n" + data.id +
-      "\n\nAmount:\n" + data.amount + " USDT" +
-      "\n\nSend exactly:\n" + data.amount + " USDT TRC-20" +
-      "\n\nTo:\n" + relayAddressBox.textContent +
-      "\n\nCurrent status:\n" + data.status +
-      "\n\nWaiting for the blockchain deposit..."
-    );
+    /* ---------- COPY RELAY ADDRESS ---------- */
 
-    startPolling();
+    async function copyRelayAddress() {
+      const address = relayAddressBox.textContent.trim();
 
-  } catch (error) {
-    setStatus("ERROR\n\n" + error.message, "error");
-  } finally {
-    createButton.disabled = false;
-  }
-}
+      if (
+        !address ||
+        address === "Loading relay address..." ||
+        address === "Unavailable" ||
+        address.startsWith("ERROR")
+      ) return;
 
-
-/* ---------- POLLING ---------- */
-
-function startPolling() {
-  if (pollTimer) clearInterval(pollTimer);
-  pollStatus();
-  pollTimer = setInterval(pollStatus, 5000);
-}
-
-function stopPolling() {
-  if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
-}
-
-async function pollStatus() {
-  if (!currentRequestId) return;
-
-  try {
-    const response = await fetch(
-      "/api/requests/" + encodeURIComponent(currentRequestId),
-      { method: "GET", headers: { "Accept": "application/json" } }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || "Unable to retrieve payment status.");
+      try {
+        await navigator.clipboard.writeText(address);
+        setStatus("Relay address copied to clipboard.", "success");
+      } catch {
+        setStatus("Could not copy automatically. Please copy manually.");
+      }
     }
 
-    let message = "PAYMENT REQUEST\n\n";
-    message += "Request ID:\n" + data.id + "\n\n";
-    message += "Amount:\n" + data.amount + " USDT\n\n";
-    message += "Status:\n" + data.status + "\n\n";
 
-    if (data.depositTxid) message += "Deposit TX:\n" + data.depositTxid + "\n\n";
-    if (data.payoutTxid)  message += "Payout TX:\n"  + data.payoutTxid  + "\n\n";
-    if (data.error)       message += "Server message:\n" + data.error + "\n\n";
+    /* ---------- CREATE PAYMENT REQUEST ---------- */
 
-    if (data.status === "awaiting_deposit") {
-      message += "Waiting for the confirmed USDT deposit.";
-    } else if (data.status === "payout_pending") {
-      message += "Deposit verified.\nPreparing the recipient payout.";
-    } else if (data.status === "payout_broadcast") {
-      message += "Payout broadcast.\nWaiting for final blockchain verification.";
-    } else if (data.status === "completed") {
-      message += "COMPLETED\n\nThe USDT payout has been verified on-chain.";
-      stopPolling();
-    } else if (data.status === "expired") {
-      message += "This payment request expired before a matching deposit was detected.";
-      stopPolling();
+    async function createRequest() {
+      const sender    = senderInput.value.trim();
+      const recipient = recipientInput.value.trim();
+      const amount    = amountInput.value.trim();
+
+      if (!sender)    { setStatus("Enter the sender TRON address.", "error");    senderInput.focus();    return; }
+      if (!recipient) { setStatus("Enter the recipient TRON address.", "error"); recipientInput.focus(); return; }
+      if (!amount)    { setStatus("Enter the USDT amount.", "error");            amountInput.focus();    return; }
+
+      if (sender.toLowerCase() === recipient.toLowerCase()) {
+        setStatus("Sender and recipient must be different.", "error");
+        return;
+      }
+
+      createButton.disabled = true;
+      setStatus("Creating payment request...");
+
+      try {
+        const response = await fetch("/api/requests", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
+          body: JSON.stringify({
+            senderAddress: sender,
+            recipientAddress: recipient,
+            amount: amount
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "The server rejected the request.");
+        }
+
+        currentRequestId = data.id;
+
+        setStatus(
+          "PAYMENT REQUEST CREATED\n\n" +
+          "Request ID:\n" + data.id +
+          "\n\nAmount:\n" + data.amount + " USDT" +
+          "\n\nSend exactly:\n" + data.amount + " USDT TRC-20" +
+          "\n\nTo Relay Address:\n" + relayAddressBox.textContent +
+          "\n\nCurrent status:\n" + data.status +
+          "\n\nWaiting for the blockchain deposit..."
+        );
+
+        startPolling();
+
+      } catch (error) {
+        setStatus("ERROR\n\n" + error.message, "error");
+      } finally {
+        createButton.disabled = false;
+      }
     }
 
-    setStatus(message, data.status === "completed" ? "success" : "");
 
-  } catch (error) {
-    setStatus(
-      "Payment status temporarily unavailable.\n\n" + error.message
-    );
-  }
-}
+    /* ---------- POLLING ---------- */
+
+    function startPolling() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollStatus();
+      pollTimer = setInterval(pollStatus, 5000);
+    }
+
+    function stopPolling() {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    }
+
+    async function pollStatus() {
+      if (!currentRequestId) return;
+
+      try {
+        const response = await fetch(
+          "/api/requests/" + encodeURIComponent(currentRequestId),
+          { method: "GET", headers: { "Accept": "application/json" } }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Unable to retrieve payment status.");
+        }
+
+        let message = "PAYMENT REQUEST\n\n";
+        message += "Request ID:\n" + data.id + "\n\n";
+        message += "Amount:\n" + data.amount + " USDT\n\n";
+        message += "Status:\n" + data.status + "\n\n";
+
+        if (data.depositTxid) message += "Deposit TX:\n" + data.depositTxid + "\n\n";
+        if (data.payoutTxid)  message += "Payout TX:\n"  + data.payoutTxid  + "\n\n";
+        if (data.error)       message += "Server message:\n" + data.error + "\n\n";
+
+        // Aligned with backend status enums:
+        // 'waiting' | 'deposit_confirmed' | 'payout_processing' | 'completed' | 'failed' | 'expired'
+        if (data.status === "waiting") {
+          message += "Waiting for confirmed USDT deposit on-chain...";
+        } else if (data.status === "deposit_confirmed") {
+          message += "Deposit verified!\nPreparing recipient payout...";
+        } else if (data.status === "payout_processing") {
+          message += "Payout processing on TRON network...";
+        } else if (data.status === "completed") {
+          message += "COMPLETED\n\nThe USDT payout has been verified on-chain.";
+          stopPolling();
+        } else if (data.status === "failed") {
+          message += "FAILED\n\nPayout failed. See server message above.";
+          stopPolling();
+        } else if (data.status === "expired") {
+          message += "EXPIRED\n\nThis request expired before a deposit arrived.";
+          stopPolling();
+        }
+
+        const alertType = data.status === "completed" ? "success" : (data.status === "failed" ? "error" : "");
+        setStatus(message, alertType);
+
+      } catch (error) {
+        setStatus("Payment status temporarily unavailable.\n\n" + error.message, "warning");
+      }
+    }
 
 
-/* ---------- INITIALIZE ---------- */
+    /* ---------- INITIALIZE ---------- */
 
-loadConfig();
-
-</script>
+    loadConfig();
+  </script>
 
 </body>
 </html>
